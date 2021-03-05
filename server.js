@@ -22,8 +22,8 @@ const PORT = process.env.PORT || 4600;
 const DATA_DIR = 'data';
 const TAG_RE = /#\w+/g;
 const slugToPath = (slug) => {
-  const filename = `${slug}.md`;
-  return path.join(DATA_DIR, filename);
+    const filename = `${slug}.md`;
+    return path.join(DATA_DIR, filename);
 };
 
 // initialize express app
@@ -41,81 +41,115 @@ app.use(bodyParser.json());
 app.use('/', express.static(path.join(__dirname, 'client', 'build')));
 
 
-
 // GET: '/api/page/:slug'
 // success response: {status: 'ok', body: '<file contents>'}
 // failure response: {status: 'error', message: 'Page does not exist.'}
-app.get('/api/page/:slug', async (req, res) => {
-  const filename = slugToPath(req.params.slug);
-  try {
-    const body = await readFile(filename, 'utf-8');
-    res.json({ status: 'ok', body });
-    // return jsonOK(res, { body });
-  } catch (e) {
-    res.json({ status: 'error', message: 'Page does not exist.' });
-    // return jsonError(res, 'Page does not exist.');
-  }
+app.get('/api/page/:slug', async(req, res) => {
+    const filename = slugToPath(req.params.slug);
+    try {
+        const body = await readFile(filename, 'utf-8');
+        res.json({ status: 'ok', body });
+        // return jsonOK(res, { body });
+    } catch (err) {
+        res.json({ status: 'error', message: 'Page does not exist.' });
+        // return jsonError(res, 'Page does not exist.');
+    }
 });
 
 
 // POST: '/api/page/:slug'
-//  body: {body: '<file text content>'}
+// body: {body: '<file text content>'}
 // tries to write the body to the given file
-//  success response: {status: 'ok'}
-//  failure response: {status: 'error', message: 'Could not write page.'}
-app.post('/api/page/:slug', async (req, res) => {
-  const filename = slugToPath(req.params.slug);
-  try {
+// success response: {status: 'ok'}
+// failure response: {status: 'error', message: 'Could not write page.'}
+app.post('/api/page/:slug', async(req, res) => {
+    const filename = slugToPath(req.params.slug);
+    try {
+        const text = req.body;
+        await writeFile(filename, text.body);
+        res.json({ status: 'ok', text });
 
-  } catch (e) {
-
-  }
+    } catch (err) {
+        res.json({ status: 'error', message: 'Page does not exist.' })
+    }
 });
-
 
 // GET: '/api/pages/all'
 // sends an array of all file names in the DATA_DIR
 // file names do not have .md, just the name!
-//  success response: {status:'ok', pages: ['fileName', 'otherFileName']}
-//  failure response: no failure response
-app.get('/api/pages/all', async (req, res) => {
-
+// success response: {status:'ok', pages: ['fileName', 'otherFileName']}
+// failure response: no failure response
+app.get('/api/pages/all', async(req, res) => {
+    const pageWithErrors = await readDir(_dirname + '/' + DATA_DIR);
+    const pages = pageWithErrors.map((filename) => {
+        return path.parse(filename).name
+    })
+    res.json({ status: 'ok', pages })
 });
-
 
 // GET: '/api/tags/all'
 // sends an array of all tag names in all files, without duplicates!
 // tags are any word in all documents with a # in front of it
 // hint: use the TAG_RE regular expression to search the contents of each file
-//  success response: {status:'ok', tags: ['tagName', 'otherTagName']}
-//  failure response: no failure response
-app.get('/api/tags/all', async (req, res) => {
+// success response: {status:'ok', tags: ['tagName', 'otherTagName']}
+// failure response: no failure response
+app.get('/api/tags/all', async(req, res) => {
+    const tags = req.params.body.tags;
 
+    try {
+        const pageWithErrors = await readDir(`${__dirname}/${DATA_DIR}`);
+        for (const page of pageWithErrors) {
+            const filename = `${DATA_DIR}/${page}`;
+            const fileContent = await readFile(filename, 'utf8');
+            let matchAllTags = fileContent.matchAll(TAG_RE);
+            for (const tag of matchAllTags) {
+                tags.push(tag[0]);
+            }
+        }
+        tags = tags.filter((value, index) => tags.indexOf(value) == index);
+        tags = tags.map(T => T.slice(1));
+        res.json({ status: 'ok', tags });
+
+    } catch (err) {
+        console.error(err)
+    }
 });
-
 
 // GET: '/api/tags/:tag'
 // searches through the contents of each file looking for the :tag
 // it will send an array of all file names that contain this tag (without .md!)
-//  success response: {status:'ok', tag: 'tagName', pages: ['tagName', 'otherTagName']}
-//  failure response: no failure response
-app.get('/api/tags/:tag', async (req, res) => {
+// success response: {status:'ok', tag: 'tagName', pages: ['tagName', 'otherTagName']}
+// failure response: no failure response
+app.get('/api/tags/:tag', async(req, res) => {
+    let pages = [];
+    try {
+        const pageWithErrors = await readDir(`${__dirname}/${DATA_DIR}`);
+        for (const page of pageWithErrors) {
+            const filename = `${DATA_DIR}/${page}`;
+            const fileContent = await readFile(filename, 'utf8');
+            if (fileContent.includes(`#${req.params.tag}`)) {
+                const pageWithErrors = path.parse(page).name;
+                pages.push(pageWithErrors);
+            }
+        }
+        res.json({ status: 'ok', tags: req.params.tags, pages })
 
+    } catch (e) {
+        console.error(e)
+    }
 });
-
 
 // this needs to be here for the frontend to create new wiki pages
-//  if the route is not one from above
-//  it assumes the user is creating a new page
+// if the route is not one from above
+// it assumes the user is creating a new page
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
+    res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
 
-
 app.listen(PORT, (err) => {
-  if (err) {
-    console.error(err);
-    return;
-  }
-  console.log(`Wiki app is serving at http://localhost:${PORT}`)
+    if (err) {
+        console.error(err);
+        return;
+    }
+    console.log(`Wiki app is serving at http://localhost:${PORT}`)
 });

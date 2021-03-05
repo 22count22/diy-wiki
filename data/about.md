@@ -1,6 +1,6 @@
-# About
 
-This is a wiki.
+# who are we and what are we doing here?
 
-#about #default
-
+ we're  hackyourfuture student code
+ 
+# #get #post #delete #view #head #option #link #unlink & etc...
